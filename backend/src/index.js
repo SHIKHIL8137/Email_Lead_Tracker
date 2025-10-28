@@ -21,14 +21,13 @@ dotenv.config();
 const createApp = () => {
   const app = express();
 
-
   app.set("trust proxy", true);
 
-
-  app.use(helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-  }));
-
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+    })
+  );
 
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -37,30 +36,41 @@ const createApp = () => {
     legacyHeaders: false,
   });
   app.use(limiter);
-
-
   app.use(hpp());
-
-
   app.use(mongoSanitize());
-
   app.use(xss());
 
-  const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+
+  const allowedOrigins = [
+    process.env.FRONTEND_URL, 
+    "http://localhost:5173", 
+  ];
+
   app.use(
     cors({
-      origin: FRONTEND_URL,
+      origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        } else {
+          return callback(new Error("Not allowed by CORS"));
+        }
+      },
       credentials: true,
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
     })
   );
+
+
+  app.options("*", cors());
+
   app.use(express.json({ limit: "200kb" }));
   app.use(cookieParser());
   app.use(morgan("dev"));
 
 
   app.get("/healthz", (req, res) => res.status(200).send("ok"));
-
-
   app.use("/api/auth", authRoutes);
   app.use("/api/leads", leadRoutes);
   mountEmailRoutes(app);
@@ -80,14 +90,16 @@ const startWorker = async () => {
   try {
     await connectDB();
     const app = createApp();
-    server = app.listen(PORT, () => console.log(`Worker ${process.pid} listening on ${PORT}`));
+    server = app.listen(PORT, () =>
+      console.log(`Worker ${process.pid} listening on ${PORT}`)
+    );
   } catch (error) {
     console.error("Failed to start server", error);
     process.exit(1);
   }
 };
 
-// Graceful shutdown
+
 const shutdown = (signal) => {
   console.log(`\n${signal} received: closing server (pid ${process.pid})...`);
   if (server) {
@@ -109,7 +121,8 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 if (cluster.isPrimary) {
-  const numCPUs = Math.max(1, Number(process.env.WEB_CONCURRENCY) || os.cpus().length);
+  const numCPUs =
+    Math.max(1, Number(process.env.WEB_CONCURRENCY) || os.cpus().length);
   console.log(`Primary ${process.pid} is running. Forking ${numCPUs} workers...`);
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
