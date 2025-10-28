@@ -1,0 +1,42 @@
+# dependencies
+node_modules/
+
+# logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# env
+.env
+.env.local
+.env.*.local
+
+# build outputs
+/dist
+/build
+/.vite
+.cache
+coverage
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+*.swp
+.idea/
+.vscode/
+
+# misc
+*.map
+*.tgz
+
+# frontend artifacts
+lead-tracker/frontend/dist
+lead-tracker/frontend/.vite
+
+# backend artifacts
+lead-tracker/backend/.cache
