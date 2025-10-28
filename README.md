@@ -28,7 +28,6 @@ A full-stack lead management system with email tracking, campaign automation, an
 - 🔐 JWT authentication with secure cookies
 - 📧 Email campaign management with tracking
 - 📊 Real-time analytics dashboard
-- 🎯 Lead pipeline management
 - 📝 Email templates with AI snippets
 - 🔗 Open/Click tracking
 - 🚀 Performance optimized with clustering
