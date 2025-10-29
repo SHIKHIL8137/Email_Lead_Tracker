@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../lib/api";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 
 export default function Campaigns() {
   const [templates, setTemplates] = useState([]);
@@ -12,6 +14,7 @@ export default function Campaigns() {
   const [message, setMessage] = useState("");
   const [overrideBody, setOverrideBody] = useState("");
   const [snippetLoading, setSnippetLoading] = useState(false);
+  const [editorError, setEditorError] = useState(""); // ✅ Editor validation
 
   useEffect(() => {
     fetchTemplates();
@@ -59,36 +62,64 @@ export default function Campaigns() {
   };
 
   const fetchLeads = async () => {
-    const res = await api.get("/leads");
-    const leadsData = Array.isArray(res.data)
-      ? res.data
-      : res.data.leads || res.data.data || [];
-    setLeads(leadsData);
+    try {
+      const res = await api.get("/leads");
+      const leadsData = Array.isArray(res.data)
+        ? res.data
+        : res.data.leads || res.data.data || [];
+      setLeads(leadsData);
+    } catch (err) {
+      console.error("Failed to fetch leads", err);
+      setMessage(
+        "Failed to load leads: " +
+          (err.response?.data?.message || err.message)
+      );
+    }
   };
 
-  const canSend = () => !!selectedLead; 
-
-  const canGenerateSnippet = () =>
-    !selectedTemplate && selectedLead && !sending;
+  const canSend = () => !!selectedLead;
+  const canGenerateSnippet = () => !selectedTemplate && selectedLead && !sending;
 
   const send = async () => {
-    if (!canSend()) {
-      setMessage("Select a lead before sending.");
+    if (!selectedLead) {
+      setMessage("⚠️ Please select a lead before sending.");
       return;
     }
+
+    // ✅ Quill empty validation — ignore <p><br></p> etc.
+    const cleanHTML = overrideBody.replace(/<(.|\n)*?>/g, "").trim();
+    if (!cleanHTML) {
+      setEditorError("Email content cannot be empty.");
+      setMessage("");
+      return;
+    } else {
+      setEditorError("");
+    }
+
     setSending(true);
     setMessage("");
     try {
       const payload = {
         leadIds: selectedLead ? [selectedLead] : [],
         templateId: selectedTemplate || undefined,
-        body: overrideBody || undefined,
+        body: overrideBody,
       };
-      await api.post("/email/campaigns", payload);
-      setMessage("✅ Email queued/sent");
-      setOverrideBody("");
+
+      const res = await api.post("/email/campaigns", payload, {
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.status === 200 || res.status === 201) {
+        setMessage("✅ Email queued/sent successfully.");
+        setOverrideBody("");
+      } else {
+        throw new Error(res.data?.message || "Unexpected response from server.");
+      }
     } catch (err) {
-      setMessage("❌ " + (err.response?.data?.message || err.message));
+      console.error("Email send failed:", err);
+      setMessage(
+        "❌ Failed to send: " + (err.response?.data?.message || err.message)
+      );
     } finally {
       setSending(false);
     }
@@ -108,8 +139,9 @@ export default function Campaigns() {
         templateId: null,
       });
       setOverrideBody(res.data.html || res.data.body || "");
-      setMessage("✨ Snippet generated");
+      setMessage("✨ Snippet generated successfully.");
     } catch (err) {
+      console.error("Snippet generation failed:", err);
       setMessage(
         "Failed to generate snippet: " +
           (err.response?.data?.message || err.message)
@@ -126,7 +158,7 @@ export default function Campaigns() {
       transition={{ duration: 0.5 }}
       className="space-y-8"
     >
-
+      {/* Header */}
       <div>
         <h1 className="text-4xl font-bold bg-gradient-to-r p-2 from-blue-400 to-purple-500 bg-clip-text text-transparent mb-2">
           Campaigns
@@ -134,9 +166,9 @@ export default function Campaigns() {
         <p className="text-gray-400">Send personalized email campaigns</p>
       </div>
 
-
+      {/* Lead & Template Selection */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
+        {/* Lead Select */}
         <motion.div
           whileHover={{ scale: 1.02 }}
           className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 backdrop-blur-xl p-6 rounded-2xl border border-blue-500/20 hover:border-blue-500/40 transition-all"
@@ -157,10 +189,13 @@ export default function Campaigns() {
             ))}
           </select>
           {!selectedLead && (
-            <p className="mt-2 text-xs text-blue-300/80">Select a lead to enable sending.</p>
+            <p className="mt-2 text-xs text-blue-300/80">
+              Select a lead to enable sending.
+            </p>
           )}
         </motion.div>
 
+        {/* Template Select */}
         <motion.div
           whileHover={{ scale: 1.02 }}
           className="bg-gradient-to-br from-purple-500/10 to-purple-600/10 backdrop-blur-xl p-6 rounded-2xl border border-purple-500/20 hover:border-purple-500/40 transition-all"
@@ -180,11 +215,13 @@ export default function Campaigns() {
               </option>
             ))}
           </select>
-          {tplError && <div className="text-sm text-red-400 mt-2">{tplError}</div>}
+          {tplError && (
+            <div className="text-sm text-red-400 mt-2">{tplError}</div>
+          )}
         </motion.div>
       </div>
 
-
+      {/* Buttons */}
       <div className="flex flex-wrap items-center gap-3">
         <motion.button
           whileHover={{ scale: 1.05 }}
@@ -219,7 +256,8 @@ export default function Campaigns() {
         {message && (
           <div
             className={`text-sm mt-2 ${
-              message.toLowerCase().includes("fail")
+              message.toLowerCase().includes("fail") ||
+              message.toLowerCase().includes("error")
                 ? "text-red-400"
                 : "text-green-400"
             }`}
@@ -229,6 +267,7 @@ export default function Campaigns() {
         )}
       </div>
 
+      {/* Email Content Editor */}
       <motion.div
         whileHover={{ scale: 1.01 }}
         className="bg-gray-800/50 backdrop-blur-xl p-6 rounded-2xl border border-gray-700/50 shadow-2xl transition-all"
@@ -250,11 +289,13 @@ export default function Campaigns() {
           )}
         </div>
 
-        <textarea
-          className="w-full bg-gray-900/60 text-gray-100 border border-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-          rows={10}
+        <ReactQuill
+          theme="snow"
           value={overrideBody}
-          onChange={(e) => setOverrideBody(e.target.value)}
+          onChange={(value) => {
+            setOverrideBody(value);
+            if (editorError) setEditorError("");
+          }}
           placeholder={
             snippetLoading
               ? "Generating snippet..."
@@ -262,7 +303,23 @@ export default function Campaigns() {
               ? "Template content (you can edit to override)"
               : "Write or generate your email content (HTML allowed)"
           }
+          className={`bg-gray-900/60 text-gray-100 border ${
+            editorError ? "border-red-500" : "border-gray-700"
+          } rounded-lg`}
+          modules={{
+            toolbar: [
+              [{ header: [1, 2, false] }],
+              ["bold", "italic", "underline", "strike"],
+              [{ list: "ordered" }, { list: "bullet" }],
+              ["link"],
+              ["clean"],
+            ],
+          }}
         />
+
+        {editorError && (
+          <p className="text-sm text-red-400 mt-2">{editorError}</p>
+        )}
       </motion.div>
     </motion.div>
   );
