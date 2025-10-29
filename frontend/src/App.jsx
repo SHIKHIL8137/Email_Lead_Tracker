@@ -5,6 +5,8 @@ import Navbar from "./components/Navebar";
 import PrivateRoute from "./components/PrivateRoutes";
 import PageTransition from "./components/PageTransition";
 import LoadingComponent from "./components/LoadingComponent";
+import PublicRoute from "./components/PublicRoute";
+import NotFound from "./pages/NotFound";
 
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
@@ -33,28 +35,27 @@ export default function App() {
         className="container mx-auto px-6 py-8 overflow-y-auto"
         style={{ scrollBehavior: "smooth" }}
       >
-
-        <Suspense
-          fallback={
-            <LoadingComponent />
-          }
-        >
+        <Suspense fallback={<LoadingComponent />}>
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
               <Route
                 path="/login"
                 element={
-                  <PageTransition>
-                    <Login />
-                  </PageTransition>
+                  <PublicRoute>
+                    <PageTransition>
+                      <Login />
+                    </PageTransition>
+                  </PublicRoute>
                 }
               />
               <Route
                 path="/register"
                 element={
-                  <PageTransition>
-                    <Register />
-                  </PageTransition>
+                  <PublicRoute>
+                    <PageTransition>
+                      <Register />
+                    </PageTransition>
+                  </PublicRoute>
                 }
               />
               <Route
@@ -105,6 +106,14 @@ export default function App() {
                       <Templates />
                     </PageTransition>
                   </PrivateRoute>
+                }
+              />
+              <Route
+                path="*"
+                element={
+                  <PageTransition>
+                    <NotFound />
+                  </PageTransition>
                 }
               />
             </Routes>
