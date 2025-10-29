@@ -16,7 +16,6 @@ export default function LoadingComponent() {
           className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-500/5 to-pink-500/5 rounded-full blur-3xl"
         />
       </div>
-
       <div className="relative z-10 flex flex-col items-center gap-6">
         <div className="relative w-20 h-20">
           <motion.div

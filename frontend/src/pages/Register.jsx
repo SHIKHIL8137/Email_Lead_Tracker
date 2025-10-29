@@ -10,6 +10,7 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [loading, setLoading] = useState(false); // ✅ added loading state
   const auth = useAuth();
   const navigate = useNavigate();
 
@@ -17,7 +18,8 @@ export default function Register() {
     const errors = {};
     if (!name.trim()) errors.name = "Full name is required";
     if (!email) errors.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Enter a valid email";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      errors.email = "Enter a valid email";
     if (!password) errors.password = "Password is required";
     else if (password.length < 8) errors.password = "At least 8 characters";
     setFieldErrors(errors);
@@ -28,11 +30,15 @@ export default function Register() {
     e.preventDefault();
     setErr(null);
     if (!validate()) return;
+
+    setLoading(true); // ✅ start loading
     try {
       await auth.register(name, email, password);
       navigate("/");
     } catch (err) {
       setErr(err.response?.data?.message || "Failed to register");
+    } finally {
+      setLoading(false); // ✅ stop loading
     }
   };
 
@@ -102,9 +108,25 @@ export default function Register() {
 
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold px-6 py-3 rounded-lg shadow-lg hover:shadow-purple-500/50 transition-all"
+              disabled={loading} // ✅ disable button during loading
+              className={`w-full font-semibold px-6 py-3 rounded-lg shadow-lg transition-all ${
+                loading
+                  ? "bg-gray-600 cursor-not-allowed"
+                  : "bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-purple-500/50"
+              }`}
             >
-              Create Account
+              {loading ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center justify-center space-x-2"
+                >
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  <span>Creating...</span>
+                </motion.div>
+              ) : (
+                "Create Account"
+              )}
             </Button>
           </form>
 
