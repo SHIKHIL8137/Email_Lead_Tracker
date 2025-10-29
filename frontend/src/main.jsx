@@ -11,31 +11,37 @@ import { ToastProvider } from "./components/Toast";
 
 gsap.registerPlugin(ScrollToPlugin);
 
-// Smooth scroll handler
 function useSmoothScroll() {
   useEffect(() => {
     const handleClick = (e) => {
       const target = e.target.closest("a[href^='#']");
-      if (target) {
+      if (!target) return;
+
+      const id = target.getAttribute("href").slice(1);
+      const el = document.getElementById(id);
+      const main = document.querySelector("main");
+
+      if (el && main) {
         e.preventDefault();
-        const id = target.getAttribute("href").slice(1);
-        const el = document.getElementById(id);
-        if (el) {
-          gsap.to(window, {
-            duration: 1,
-            scrollTo: { y: el, offsetY: 80 },
-            ease: "power2.inOut"
-          });
-        }
+        const targetY = el.offsetTop - 80;
+
+        gsap.to(main, {
+          duration: 0.1,
+          scrollTo: { y: targetY },
+          ease: "expo.out",
+        });
       }
     };
+
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, []);
 }
 
-createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
+function Root() {
+  useSmoothScroll();
+
+  return (
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
@@ -43,5 +49,11 @@ createRoot(document.getElementById("root")).render(
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
+  );
+}
+
+createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <Root />
   </React.StrictMode>
 );

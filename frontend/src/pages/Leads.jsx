@@ -91,7 +91,7 @@ export default function Leads() {
     >
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold p-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
             Leads
           </h1>
           <p className="text-gray-400 mt-1">Manage your lead pipeline</p>

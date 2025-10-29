@@ -128,7 +128,7 @@ export default function Campaigns() {
     >
 
       <div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-2">
+        <h1 className="text-4xl font-bold bg-gradient-to-r p-2 from-blue-400 to-purple-500 bg-clip-text text-transparent mb-2">
           Campaigns
         </h1>
         <p className="text-gray-400">Send personalized email campaigns</p>

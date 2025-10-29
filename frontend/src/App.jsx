@@ -7,6 +7,10 @@ import PageTransition from "./components/PageTransition";
 import LoadingComponent from "./components/LoadingComponent";
 import PublicRoute from "./components/PublicRoute";
 import NotFound from "./pages/NotFound";
+import gsap from "gsap";
+import { ScrollToPlugin } from "gsap/ScrollToPlugin";
+
+gsap.registerPlugin(ScrollToPlugin);
 
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
@@ -18,24 +22,21 @@ const Templates = lazy(() => import("./pages/Templates"));
 
 export default function App() {
   const location = useLocation();
-  const mainRef = useRef(null);
 
   useEffect(() => {
-    if (mainRef.current) {
-      mainRef.current.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    gsap.to(window, {
+      duration: 0.6,
+      scrollTo: { y: 0 },
+      ease: "power2.out",
+    });
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-gray-100">
-      <Navbar />
+    <Suspense fallback={<LoadingComponent />}>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-gray-100">
+        <Navbar />
 
-      <main
-        ref={mainRef}
-        className="container mx-auto px-6 py-8 overflow-y-auto"
-        style={{ scrollBehavior: "smooth" }}
-      >
-        <Suspense fallback={<LoadingComponent />}>
+        <main className="container mx-auto px-6 py-8">
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
               <Route
@@ -58,6 +59,7 @@ export default function App() {
                   </PublicRoute>
                 }
               />
+
               <Route
                 path="/"
                 element={
@@ -108,6 +110,7 @@ export default function App() {
                   </PrivateRoute>
                 }
               />
+
               <Route
                 path="*"
                 element={
@@ -118,21 +121,21 @@ export default function App() {
               />
             </Routes>
           </AnimatePresence>
-        </Suspense>
-      </main>
+        </main>
 
-      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
-        <motion.div
-          animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl"
-        />
-        <motion.div
-          animate={{ scale: [1.2, 1, 1.2], rotate: [90, 0, 90] }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-500/5 to-pink-500/5 rounded-full blur-3xl"
-        />
+        <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+          <motion.div
+            animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl"
+          />
+          <motion.div
+            animate={{ scale: [1.2, 1, 1.2], rotate: [90, 0, 90] }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-500/5 to-pink-500/5 rounded-full blur-3xl"
+          />
+        </div>
       </div>
-    </div>
+    </Suspense>
   );
 }
