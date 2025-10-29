@@ -16,6 +16,7 @@ const emailHistorySchema = new mongoose.Schema(
     trackId: { type: String },
     openedAt: { type: Date },
     clickedAt: { type: Date },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

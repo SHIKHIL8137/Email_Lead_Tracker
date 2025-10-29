@@ -1,7 +1,10 @@
+import Lead from "../models/Lead";
+
 export const exportLeads = async (req, res) => {
   try {
+    const userId = req.user._id;
     const { format = "json" } = req.query;
-    const leads = await Lead.find({ createdBy: req.user._id })
+    const leads = await Lead.find({ createdBy: userId })
       .select("-__v")
       .lean();
 

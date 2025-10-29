@@ -8,10 +8,16 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper: Ensure ownership
+const requireOwnership = (doc, userId) => {
+  if (!doc || doc.createdBy.toString() !== userId.toString()) {
+    return false;
+  }
+  return true;
+};
 
 const parseSubjectFromBody = (raw) => {
   if (!raw || typeof raw !== "string") return { subject: null, body: raw };
-
 
   const textVersion = raw
     .replace(/<br\s*\/?>(?=\s*\n?)/gi, "\n")
@@ -34,28 +40,48 @@ const parseSubjectFromBody = (raw) => {
   return { subject, body: cleaned.trim() };
 };
 
-const fetchLeadsForCampaign = async ({ leadIds, filters = {} }) => {
+const fetchLeadsForCampaign = async ({ leadIds, filters = {}, userId }) => {
+  const q = { createdBy: userId };
+
   if (Array.isArray(leadIds) && leadIds.length) {
-    return await Lead.find({ _id: { $in: leadIds } });
+    q._id = { $in: leadIds };
+    return await Lead.find(q);
   }
-  const q = {};
+
   if (filters.status) q.status = filters.status;
   if (filters.source) q.source = filters.source;
-  if (filters.q)
+  if (filters.q) {
     q.$or = [
       { name: new RegExp(filters.q, "i") },
       { company: new RegExp(filters.q, "i") },
       { email: new RegExp(filters.q, "i") },
     ];
+  }
+
   return await Lead.find(q).limit(1000);
 };
+
+// === EMAIL TEMPLATE CONTROLLERS ===
 
 export const createTemplate = async (req, res) => {
   try {
     const { name, subject, body } = req.body;
-    const t = new EmailTemplate({ name, subject, body });
+    const userId = req.user._id;
+
+    const t = new EmailTemplate({
+      name,
+      subject,
+      body,
+      createdBy: userId,
+    });
     await t.save();
-    res.json({ id: t._id, name: t.name, subject: t.subject, createdAt: t.createdAt });
+
+    res.json({
+      id: t._id,
+      name: t.name,
+      subject: t.subject,
+      createdAt: t.createdAt,
+    });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
@@ -63,10 +89,12 @@ export const createTemplate = async (req, res) => {
 
 export const listTemplates = async (req, res) => {
   try {
-    const templates = await EmailTemplate.find()
-      .select("name subject createdAt updatedAt")
+    const userId = req.user._id;
+    const templates = await EmailTemplate.find({ createdBy: userId })
+      .select("name subject createdAt updatedAt body")
       .sort({ createdAt: -1 })
       .lean();
+
     res.json(templates);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
@@ -75,11 +103,18 @@ export const listTemplates = async (req, res) => {
 
 export const getTemplate = async (req, res) => {
   try {
-    const template = await EmailTemplate.findById(req.params.id)
+    const userId = req.user._id;
+    const template = await EmailTemplate.findOne({
+      _id: req.params.id,
+      createdBy: userId,
+    })
       .select("name subject body createdAt updatedAt")
       .lean();
-    if (!template)
+
+    if (!template) {
       return res.status(404).json({ message: "Template not found" });
+    }
+
     res.json(template);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
@@ -88,17 +123,21 @@ export const getTemplate = async (req, res) => {
 
 export const updateTemplate = async (req, res) => {
   try {
+    const userId = req.user._id;
     const { name, subject, body } = req.body;
-    await EmailTemplate.findByIdAndUpdate(
-      req.params.id,
+
+    const updated = await EmailTemplate.findOneAndUpdate(
+      { _id: req.params.id, createdBy: userId },
       { name, subject, body },
       { new: true }
-    );
-    const updated = await EmailTemplate.findById(req.params.id)
+    )
       .select("name subject body updatedAt")
       .lean();
-    if (!updated)
+
+    if (!updated) {
       return res.status(404).json({ message: "Template not found" });
+    }
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
@@ -107,28 +146,50 @@ export const updateTemplate = async (req, res) => {
 
 export const deleteTemplate = async (req, res) => {
   try {
-    const template = await EmailTemplate.findByIdAndDelete(req.params.id);
-    if (!template)
+    const userId = req.user._id;
+    const template = await EmailTemplate.findOneAndDelete({
+      _id: req.params.id,
+      createdBy: userId,
+    });
+
+    if (!template) {
       return res.status(404).json({ message: "Template not found" });
+    }
+
     res.json({ message: "Template deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
+// === EMAIL SENDING ===
+
 export const sendEmail = async (req, res) => {
   try {
+    const userId = req.user._id;
     const { leadId, templateId, overrideBody, to } = req.body;
+
     let lead = null;
-    if (leadId) lead = await Lead.findById(leadId);
+    if (leadId) {
+      lead = await Lead.findOne({ _id: leadId, createdBy: userId });
+      if (!lead) return res.status(404).json({ message: "Lead not found" });
+    }
 
     const recipient = to || lead?.email;
-    if (!recipient)
+    if (!recipient) {
       return res.status(400).json({ message: "No recipient specified" });
+    }
 
-    const template = templateId
-      ? await EmailTemplate.findById(templateId)
-      : null;
+    let template = null;
+    if (templateId) {
+      template = await EmailTemplate.findOne({
+        _id: templateId,
+        createdBy: userId,
+      });
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+    }
 
     let subject = template
       ? template.subject
@@ -150,6 +211,7 @@ export const sendEmail = async (req, res) => {
       leadId: lead?._id,
       templateId: template?._id,
       baseUrl,
+      createdBy: userId, // ensure history tracks owner
     });
 
     if (lead) {
@@ -157,7 +219,6 @@ export const sendEmail = async (req, res) => {
       await lead.save();
     }
 
-    // minimal response
     res.json({
       id: history._id,
       to: history.to,
@@ -174,13 +235,20 @@ export const sendEmail = async (req, res) => {
 
 export const getHistory = async (req, res) => {
   try {
-    const q = {};
-    if (req.query.leadId) q.lead = req.query.leadId;
+    const userId = req.user._id;
+    const q = { createdBy: userId };
+
+    if (req.query.leadId) {
+      const lead = await Lead.findOne({ _id: req.query.leadId, createdBy: userId });
+      if (!lead) return res.status(404).json({ message: "Lead not found" });
+      q.lead = req.query.leadId;
+    }
     if (req.query.status) q.status = req.query.status;
-    // pagination
+
     const page = Number(req.query.page || 1);
     const limit = Number(req.query.limit || 100);
     const skip = (page - 1) * limit;
+
     const items = await EmailHistory.find(q)
       .select("to subject status createdAt openedAt clickedAt previewUrl lead template")
       .populate({ path: "lead", select: "name" })
@@ -189,6 +257,7 @@ export const getHistory = async (req, res) => {
       .skip(skip)
       .limit(limit)
       .lean();
+
     const total = await EmailHistory.countDocuments(q);
     res.json({ data: items, total });
   } catch (err) {
@@ -198,15 +267,23 @@ export const getHistory = async (req, res) => {
 
 export const exportHistory = async (req, res) => {
   try {
+    const userId = req.user._id;
     const format = req.query.format || "json";
-    const q = {};
-    if (req.query.leadId) q.lead = req.query.leadId;
+    const q = { createdBy: userId };
+
+    if (req.query.leadId) {
+      const lead = await Lead.findOne({ _id: req.query.leadId, createdBy: userId });
+      if (!lead) return res.status(404).json({ message: "Lead not found" });
+      q.lead = req.query.leadId;
+    }
+
     const items = await EmailHistory.find(q)
       .select("to subject status createdAt openedAt clickedAt previewUrl lead template")
       .populate({ path: "lead", select: "name" })
       .populate({ path: "template", select: "name" })
       .sort({ createdAt: -1 })
       .lean();
+
     if (format === "csv") {
       const header = [
         "id",
@@ -246,7 +323,8 @@ export const exportHistory = async (req, res) => {
   }
 };
 
-// Tracking endpoints
+// === TRACKING ENDPOINTS ===
+
 export const trackOpen = async (req, res) => {
   const logoPath = path.resolve(__dirname, "../../public/logo.svg");
   try {
@@ -260,9 +338,8 @@ export const trackOpen = async (req, res) => {
       return res.sendFile(logoPath);
     }
 
-    // Find and update the email history
     const h = await EmailHistory.findOne({ trackId: hid });
-    if (h) {
+    if (h && h.createdBy.toString() === req.user?._id?.toString()) {
       if (!h.openedAt) h.openedAt = new Date();
       if (h.status !== "clicked") {
         h.status = "opened";
@@ -270,7 +347,6 @@ export const trackOpen = async (req, res) => {
       await h.save();
     }
 
-    // Return a real image (logo) to display in the email client
     res.set({
       "Cache-Control": "no-store, no-cache, must-revalidate, private",
       Pragma: "no-cache",
@@ -279,7 +355,6 @@ export const trackOpen = async (req, res) => {
     res.sendFile(logoPath);
   } catch (err) {
     console.error("Track open error:", err);
-    // On error, still try to return the image to avoid broken content
     try {
       res.set({
         "Cache-Control": "no-store, no-cache, must-revalidate, private",
@@ -299,22 +374,19 @@ export const trackClick = async (req, res) => {
     if (!hid) return res.status(400).send("Missing tracking ID");
     if (!url) return res.status(400).send("Missing destination URL");
 
-    // Find and update the email history
     const h = await EmailHistory.findOne({ trackId: hid });
-    if (h) {
+    if (h && h.createdBy.toString() === req.user?._id?.toString()) {
       h.status = "clicked";
-      h.clickedAt = h.clickedAt || new Date(); // Keep first click time
+      h.clickedAt = h.clickedAt || new Date();
       if (!h.openedAt) h.openedAt = new Date();
       await h.save();
     }
 
-    // Safely decode and validate the URL
     const dest = decodeURIComponent(url);
     if (!dest.startsWith("http://") && !dest.startsWith("https://")) {
       return res.status(400).send("Invalid URL protocol");
     }
 
-    // Redirect to the destination with no-cache headers
     res.set({
       "Cache-Control": "no-store, no-cache, must-revalidate, private",
       Expires: "0",
@@ -326,9 +398,11 @@ export const trackClick = async (req, res) => {
   }
 };
 
-// Campaign sender: accepts { templateId, leadIds, filters, subject, body }
+// === CAMPAIGN ===
+
 export const sendCampaign = async (req, res) => {
   try {
+    const userId = req.user._id;
     const {
       templateId,
       leadIds,
@@ -337,15 +411,18 @@ export const sendCampaign = async (req, res) => {
       body: bodyOverride,
     } = req.body;
 
-    // validate template if provided
     let template = null;
-    if (templateId) template = await EmailTemplate.findById(templateId);
- 
+    if (templateId) {
+      template = await EmailTemplate.findOne({
+        _id: templateId,
+        createdBy: userId,
+      });
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+    }
 
-    // If the provided bodyOverride includes a Subject: line, parse it once
-    // and reuse for the whole campaign.
     let campaignSubject = subjectOverride;
-
     let campaignBody = bodyOverride;
 
     if (bodyOverride) {
@@ -354,17 +431,19 @@ export const sendCampaign = async (req, res) => {
       campaignBody = parsed.body || "";
     }
 
-    // fetch leads to send to
-    const leadsToSend = await fetchLeadsForCampaign({ leadIds, filters });
-    if (!leadsToSend || leadsToSend.length === 0)
-      return res.status(400).json({ message: "No leads found for campaign" });
+    const leadsToSend = await fetchLeadsForCampaign({
+      leadIds,
+      filters,
+      userId,
+    });
 
+    if (!leadsToSend || leadsToSend.length === 0) {
+      return res.status(400).json({ message: "No leads found for campaign" });
+    }
 
     const results = { sent: 0, failed: 0, errors: [] };
     const baseUrl = `${req.protocol}://${req.get("host")}`;
 
-
-    // send sequentially to avoid overwhelming SMTP; could be parallelized with throttling
     for (const lead of leadsToSend) {
       try {
         const recipient = lead.email;
@@ -378,7 +457,6 @@ export const sendCampaign = async (req, res) => {
           campaignSubject || (template ? template.subject : "No Subject");
         const body = campaignBody || (template ? template.body : "");
 
-        // use the service to send and record history
         await sendTemplatedEmail({
           to: recipient,
           subject,
@@ -386,7 +464,9 @@ export const sendCampaign = async (req, res) => {
           leadId: lead._id,
           templateId: template?._id,
           baseUrl,
+          createdBy: userId,
         });
+
         results.sent++;
       } catch (err) {
         results.failed++;
@@ -400,14 +480,29 @@ export const sendCampaign = async (req, res) => {
   }
 };
 
-// Generate an AI-assisted personalized snippet for a lead/template
+// === AI SNIPPET GENERATION ===
+
 export const generateSnippet = async (req, res) => {
   try {
+    const userId = req.user._id;
     const { leadId, templateId, tone = "professional" } = req.body;
-    const lead = leadId ? await Lead.findById(leadId) : null;
-    const template = templateId
-      ? await EmailTemplate.findById(templateId)
-      : null;
+
+    let lead = null;
+    if (leadId) {
+      lead = await Lead.findOne({ _id: leadId, createdBy: userId });
+      if (!lead) return res.status(404).json({ message: "Lead not found" });
+    }
+
+    let template = null;
+    if (templateId) {
+      template = await EmailTemplate.findOne({
+        _id: templateId,
+        createdBy: userId,
+      });
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+    }
 
     const placeholder = (
       template?.body ||
@@ -458,69 +553,63 @@ Return ONLY the formatted email body without any extra text or annotations.`;
       process.env.SAMBANOVA_API_KEY || process.env.SAMBA_API_KEY;
     const SAMBA_MODEL =
       process.env.SAMBANOVA_MODEL || "Meta-Llama-3.1-8B-Instruct";
+
     if (!SAMBA_KEY) {
       return res
         .status(400)
         .json({ message: "SambaNova API key not configured" });
     }
 
-    try {
-      const resp = await fetch("https://api.sambanova.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${SAMBA_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: SAMBA_MODEL,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-      const data = await resp.json();
-      const text =
-        data?.choices?.[0]?.message?.content ||
-        data?.output ||
-        data?.text ||
-        data?.result ||
-        (Array.isArray(data) && data[0]?.generated_text) ||
-        null;
-      if (!text) {
-        return res
-          .status(500)
-          .json({ message: "SambaNova returned no content", raw: data });
-      }
+    const resp = await fetch("https://api.sambanova.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SAMBA_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: SAMBA_MODEL,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
 
-      const toHtml = (s) => {
-        if (!s) return "";
-        if (/<[a-z][\s\S]*>/i.test(s)) return s;
+    const data = await resp.json();
+    const text =
+      data?.choices?.[0]?.message?.content ||
+      data?.output ||
+      data?.text ||
+      data?.result ||
+      (Array.isArray(data) && data[0]?.generated_text) ||
+      null;
 
-        // Split into sections (greeting, body, signature)
-        const parts = s.split(/\n{2,}/);
-        const formatted = parts.map((part) => {
-          const lines = part.split(/\n/);
-          if (lines.length === 1) {
-            // Single line (greeting or signature)
-            return `<p style=\"margin: 0.5em 0\">${lines[0]}</p>`;
-          } else {
-            // Multi-line paragraph
-            return `<p style=\"margin: 1em 0\">${lines.join("<br/>")}</p>`;
-          }
-        });
-
-        return `<div style=\"font-family: system-ui, -apple-system, sans-serif; line-height: 1.5\">
-          ${formatted.join("\n")}
-        </div>`;
-      };
-
-      const html = toHtml(text);
-      return res.json({ body: text, html, provider: "sambanova" });
-    } catch (e) {
-      console.error("SambaNova snippet error", e);
+    if (!text) {
       return res
         .status(500)
-        .json({ message: "SambaNova request failed", error: e.message });
+        .json({ message: "SambaNova returned no content", raw: data });
     }
+
+    const toHtml = (s) => {
+      if (!s) return "";
+      if (/<[a-z][\s\S]*>/i.test(s)) return s;
+
+      const parts = s.split(/\n{2,}/);
+      const formatted = parts.map((part) => {
+        const lines = part.split(/\n/);
+        if (lines.length === 1) {
+          return `<p style="margin: 0.5em 0">${lines[0]}</p>`;
+        } else {
+          return `<p style="margin: 1em 0">${lines.join("<br/>")}</p>`;
+        }
+      });
+
+      return `<div style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.5">
+        ${formatted.join("\n")}
+      </div>`;
+    };
+
+    const html = toHtml(text);
+    return res.json({ body: text, html, provider: "sambanova" });
   } catch (err) {
+    console.error("Snippet generation error:", err);
     res
       .status(500)
       .json({ message: "Snippet generation failed", error: err.message });

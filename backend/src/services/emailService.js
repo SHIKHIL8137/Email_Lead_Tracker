@@ -66,6 +66,7 @@ export async function sendTemplatedEmail({
   leadId,
   templateId,
   baseUrl,
+  createdBy
 }) {
   const effectiveBaseUrl = (baseUrl || resolveBaseUrl()).replace(/\/$/, "");
   const trackId = uuidv4();
@@ -97,6 +98,7 @@ export async function sendTemplatedEmail({
     body: bodyWithTrack,
     status: "sent",
     trackId,
+    createdBy
   });
 
   const transport = await getTransport();
