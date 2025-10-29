@@ -1,4 +1,3 @@
-import React from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 
@@ -10,7 +9,6 @@ export default function NotFound() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center px-6">
-      {/* Background Animation */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
         <motion.div
           animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
@@ -24,9 +22,7 @@ export default function NotFound() {
         />
       </div>
 
-      {/* Content */}
       <div className="relative z-10 text-center max-w-2xl">
-        {/* 404 Number */}
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -41,7 +37,6 @@ export default function NotFound() {
             404
           </motion.h1>
 
-          {/* Glowing effect */}
           <div className="absolute inset-0 blur-3xl opacity-30">
             <div className="text-9xl md:text-[12rem] font-bold bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500">
               404
@@ -49,7 +44,6 @@ export default function NotFound() {
           </div>
         </motion.div>
 
-        {/* Message */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -65,7 +59,6 @@ export default function NotFound() {
           </p>
         </motion.div>
 
-        {/* Buttons */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -82,7 +75,6 @@ export default function NotFound() {
           </motion.button>
         </motion.div>
 
-        {/* Floating particles */}
         <div className="absolute inset-0 pointer-events-none">
           {[...Array(6)].map((_, i) => (
             <motion.div
