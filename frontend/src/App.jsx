@@ -1,18 +1,18 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, Suspense, lazy } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import Navbar from "./components/Navebar";
 import PrivateRoute from "./components/PrivateRoutes";
 import PageTransition from "./components/PageTransition";
+import LoadingComponent from "./components/LoadingComponent";
 
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import Leads from "./pages/Leads";
-import Campaigns from "./pages/Campaigns";
-import EmailHistory from "./pages/EmailHistory";
-import Templates from "./pages/Templates";
-import Pipeline from "./pages/Pipeline";
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Leads = lazy(() => import("./pages/Leads"));
+const Campaigns = lazy(() => import("./pages/Campaigns"));
+const EmailHistory = lazy(() => import("./pages/EmailHistory"));
+const Templates = lazy(() => import("./pages/Templates"));
 
 export default function App() {
   const location = useLocation();
@@ -33,77 +33,85 @@ export default function App() {
         className="container mx-auto px-6 py-8 overflow-y-auto"
         style={{ scrollBehavior: "smooth" }}
       >
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route
-              path="/login"
-              element={
-                <PageTransition>
-                  <Login />
-                </PageTransition>
-              }
-            />
-            <Route
-              path="/register"
-              element={
-                <PageTransition>
-                  <Register />
-                </PageTransition>
-              }
-            />
-            <Route
-              path="/"
-              element={
-                <PrivateRoute>
+
+        <Suspense
+          fallback={
+            <LoadingComponent />
+          }
+        >
+          <AnimatePresence mode="wait">
+            <Routes location={location} key={location.pathname}>
+              <Route
+                path="/login"
+                element={
                   <PageTransition>
-                    <Dashboard />
+                    <Login />
                   </PageTransition>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/leads"
-              element={
-                <PrivateRoute>
+                }
+              />
+              <Route
+                path="/register"
+                element={
                   <PageTransition>
-                    <Leads />
+                    <Register />
                   </PageTransition>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/campaigns"
-              element={
-                <PrivateRoute>
-                  <PageTransition>
-                    <Campaigns />
-                  </PageTransition>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/history"
-              element={
-                <PrivateRoute>
-                  <PageTransition>
-                    <EmailHistory />
-                  </PageTransition>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/templates"
-              element={
-                <PrivateRoute>
-                  <PageTransition>
-                    <Templates />
-                  </PageTransition>
-                </PrivateRoute>
-              }
-            />
-          </Routes>
-        </AnimatePresence>
+                }
+              />
+              <Route
+                path="/"
+                element={
+                  <PrivateRoute>
+                    <PageTransition>
+                      <Dashboard />
+                    </PageTransition>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/leads"
+                element={
+                  <PrivateRoute>
+                    <PageTransition>
+                      <Leads />
+                    </PageTransition>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/campaigns"
+                element={
+                  <PrivateRoute>
+                    <PageTransition>
+                      <Campaigns />
+                    </PageTransition>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/history"
+                element={
+                  <PrivateRoute>
+                    <PageTransition>
+                      <EmailHistory />
+                    </PageTransition>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/templates"
+                element={
+                  <PrivateRoute>
+                    <PageTransition>
+                      <Templates />
+                    </PageTransition>
+                  </PrivateRoute>
+                }
+              />
+            </Routes>
+          </AnimatePresence>
+        </Suspense>
       </main>
+
       <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
         <motion.div
           animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
